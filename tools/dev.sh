@@ -9,8 +9,20 @@ cd "$(dirname "$0")/.."
 
 MANAGE="uv run python manage.py"
 
-# --- init ---
-echo SKIPPED: $MANAGE migrate
+if [[ "${1:-}" == "--init" ]]; then
+    $MANAGE migrate
+    DJANGO_SUPERUSER_PASSWORD=admin $MANAGE createsuperuser --username admin --email admin@example.com --noinput 2>/dev/null || true
+    $MANAGE shell -c "
+from django.contrib.auth import get_user_model
+u = get_user_model().objects.get(username='admin')
+u.set_password('admin')
+u.save()
+"
+    shift
+else
+    echo "Hint: run with --init to migrate and create an admin/admin superuser"
+fi
+
 $MANAGE metrics_service init-service-id
 $MANAGE metrics_service init-default-settings
 $MANAGE metrics_service init-system-tasks
