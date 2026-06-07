@@ -13,6 +13,34 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 """CSRF settings to allow origins to make requests, NOTE: Only use in development!"""
 
+
+class _DevCorsMiddleware:
+    """Allow cross-origin API requests in dev mode (e.g. standalone dashboard on another port)."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.method == "OPTIONS":
+            from django.http import HttpResponse
+
+            response = HttpResponse()
+        else:
+            response = self.get_response(request)
+
+        origin = request.headers.get("Origin")
+        if origin:
+            response["Access-Control-Allow-Origin"] = origin
+            response["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            response["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+            response["Access-Control-Allow-Credentials"] = "true"
+            response["Access-Control-Max-Age"] = "86400"
+
+        return response
+
+
+MIDDLEWARE = "@insert 0 apps.settings.development._DevCorsMiddleware"
+
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.dummy.DummyCache",
