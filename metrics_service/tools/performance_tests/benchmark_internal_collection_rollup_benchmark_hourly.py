@@ -207,7 +207,7 @@ def run_rollup_phase(test_date, process, peak_memory_mb):
     return rollup_duration, peak_memory_mb
 
 
-def print_final_summary(
+def print_final_summary(  # noqa: PLR0917
     snapshot_duration,
     hourly_collection_duration,
     rollup_duration,
