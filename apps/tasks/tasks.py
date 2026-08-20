@@ -13,6 +13,10 @@ Queue routing is defined per-function in TASK_METADATA ("queue" field).
 
 import logging
 
+# Note: Hourly and snapshot collectors handle all collector types via collector_type parameter
+# Import system tasks
+from ..analytics.tasks import collect_analytics_on_demand
+
 # Dashboard reports tasks
 from ..dashboard_reports.tasks import (
     cleanup_dashboard_reports_old_data,
@@ -35,9 +39,6 @@ from .collectors.collect_snapshot_metrics import collect_snapshot_metrics
 from .collectors.daily_anonymize_and_prepare import daily_anonymize_and_prepare
 from .collectors.daily_metrics_rollup import daily_metrics_rollup
 from .collectors.send_anonymized_to_segment import send_anonymized_to_segment
-
-# Note: Hourly and snapshot collectors handle all collector types via collector_type parameter
-# Import system tasks
 from .simple.hello_world import hello_world
 from .simple.resource_sync import sync_resources_from_gateway
 from .tasks_system import create_system_tasks, submit_task_to_dispatcher
@@ -56,6 +57,9 @@ TASK_FUNCTIONS = {
     "collect_hourly_metrics": collect_hourly_metrics,
     "collect_snapshot_metrics": collect_snapshot_metrics,
     "collect_daily_metrics": collect_daily_metrics,
+    # On-demand analytics collection (ANSTRAT-1587 BYO-BI) — runs one enabled collector for an
+    # arbitrary window and stores raw output in AnalyticsPayload (does not touch the rollup path).
+    "collect_analytics_on_demand": collect_analytics_on_demand,
     # Daily Rollup and Anonymization Tasks
     "daily_metrics_rollup": daily_metrics_rollup,
     "daily_anonymize_and_prepare": daily_anonymize_and_prepare,
@@ -198,6 +202,13 @@ TASK_METADATA = {
                 "min": 1,
                 "max": 90,
             },
+            "analytics_retention_days": {
+                "type": "integer",
+                "default": 365,
+                "description": "Number of days to retain analytics payloads (BYO-BI)",
+                "min": 1,
+                "max": 3650,
+            },
             "dry_run": {
                 "type": "boolean",
                 "default": False,
@@ -289,6 +300,41 @@ TASK_METADATA = {
             {"name": "Controller version", "data": {"collector_type": "controller_version_service"}},
             {"name": "Table metadata", "data": {"collector_type": "table_metadata"}},
             {"name": "Feature flags", "data": {"collector_type": "feature_flags_service"}},
+        ],
+    },
+    "collect_analytics_on_demand": {
+        "queue": "metrics",
+        "category": "Metrics Collection",
+        "description": "Run one enabled analytics collector on demand for an arbitrary window (BYO-BI)",
+        "parameters": {
+            "collector": {
+                "type": "string",
+                "required": True,
+                "description": "Public collector name (group.function, e.g. controller.unified_jobs_dashboard)",
+            },
+            "source": {
+                "type": "string",
+                "description": "Origin of the data (defaults to the local install)",
+            },
+            "since": {
+                "type": "string",
+                "description": "ISO start of window, inclusive (windowed collectors only)",
+            },
+            "until": {
+                "type": "string",
+                "description": "ISO end of window, exclusive (windowed collectors only)",
+            },
+        },
+        "examples": [
+            {
+                "name": "Unified jobs (last hour)",
+                "data": {
+                    "collector": "controller.unified_jobs_dashboard",
+                    "since": "2026-08-17T10:00:00Z",
+                    "until": "2026-08-17T11:00:00Z",
+                },
+            },
+            {"name": "Config snapshot", "data": {"collector": "controller.config"}},
         ],
     },
     # Daily Rollup and Anonymization
@@ -528,6 +574,7 @@ __all__ = [
     "collect_hourly_metrics",
     "collect_snapshot_metrics",
     "collect_daily_metrics",
+    "collect_analytics_on_demand",
     # Daily rollup and anonymization tasks
     "daily_metrics_rollup",
     "daily_anonymize_and_prepare",
